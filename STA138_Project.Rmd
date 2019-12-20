@@ -1,0 +1,260 @@
+---
+title: "STA138_Project"
+author: "Grant Smith"
+collborator: 'Jaymie Tam'
+date: "11/26/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Data**
+
+```{r}
+Byn<-read.csv('Byssinosis.csv')
+Byn$Workspace<-as.factor(Byn$Workspace)
+(Byn)
+
+#sum(Byn$Byssinosis,Byn$Non.Byssinosis) 5419
+
+#Summary Stats
+sum(Byn$Byssinosis[Byn$Smoking=='Yes'],Byn$Non.Byssinosis[Byn$Smoking=='Yes'])
+sum(Byn$Byssinosis[Byn$Smoking=='No'],Byn$Non.Byssinosis[Byn$Smoking=='No'])
+
+sum(Byn$Byssinosis[Byn$Smoking=='Yes'],Byn$Non.Byssinosis[Byn$Smoking=='Yes'])
+sum(Byn$Byssinosis[Byn$Smoking=='No'],Byn$Non.Byssinosis[Byn$Smoking=='No'])
+
+sum(Byn$Byssinosis[Byn$Sex=='M'],Byn$Non.Byssinosis[Byn$Sex=='M'])
+sum(Byn$Byssinosis[Byn$Sex=='F'],Byn$Non.Byssinosis[Byn$Sex=='F'])
+
+
+sum(Byn$Byssinosis[Byn$Employment=='<10'],Byn$Non.Byssinosis[Byn$Employment=='<10'])
+sum(Byn$Byssinosis[Byn$Employment=='10-19'],Byn$Non.Byssinosis[Byn$Employment=='10-19'])
+sum(Byn$Byssinosis[Byn$Employment=='>=20'],Byn$Non.Byssinosis[Byn$Employment=='>=20'])
+
+sum(Byn$Byssinosis[Byn$Workspace==1],Byn$Non.Byssinosis[Byn$Workspace==1])
+sum(Byn$Byssinosis[Byn$Workspace==2],Byn$Non.Byssinosis[Byn$Workspace==2])
+sum(Byn$Byssinosis[Byn$Workspace==3],Byn$Non.Byssinosis[Byn$Workspace==3])
+```
+
+
+**Initial Observations**
+
+-workspace,employment is ordinal
+-smoking,sex,race binary
+
+-165 cases of bysinosis
+-5254 non-bysinosis
+
+Since our data is categorical we are not able to use traditional methods such as linear regression. As such the first method we will attemtp to use to analyze the data is logistic regression.
+
+
+```{r}
+n<-165+5254
+
+full.gl<-glm(cbind(Byssinosis,Non.Byssinosis)~Employment + Smoking+Sex+Race +Workspace ,family=binomial(link=logit),data=Byn)
+summary(full.gl)
+
+```
+##Assumptions
+
+```{r}
+library(car)
+vif(full.gl) #no multicollinearity
+```
+
+
+
+Using a glm and having all variables as variables we can see that sex and race are not significant based.
+Additionally, we have an AIC of 165.95
+
+```{r}
+red.gl<-glm(cbind(Byssinosis,Non.Byssinosis)~Employment + Smoking + Workspace ,family=binomial(link=logit),data=Byn)
+summary(red.gl)
+
+```
+
+Removing sex and race gives us a lower AIC of 162.56
+
+```{r}
+#Likelihood Test for model reduction
+L0 = logLik(red.gl)
+L1 = logLik(full.gl)
+LR.test = as.numeric(-2*(L0 - L1))
+LR.pval = pchisq(LR.test, df = length(coefficients(full.gl)) - length(coefficients(red.gl)),lower.tail = F )
+LR.test
+LR.pval
+
+```
+Based on the p-value from the likelihood test, we can conclude that dropping sex and race gives us a better model and as such we 
+
+#CIs for Bi's
+```{r}
+log.ci<-cbind(red.gl$coefficients-2.576*summary(red.gl)$coef[,2],red.gl$coefficients+2.576*summary(red.gl)$coef[,2])
+exp(log.ci)
+```
+
+
+Since our odds confidence intervals are strictly greater than 1 for 
+  Employment>=20,Employment10-19, and Smoking we can conclude that these variables increase the probability of 
+  having byssinosis
+Since Workspace is stircly less than 1, we can conclude with 95% confidence that Workspace decreases the   probability of having Byssinosis
+
+**Focus on just workspace**
+workspace is logically assigned scores 1,2,3 for least, moderately, most dusy
+```{r}
+library(vcdExtra)
+
+Byn[,c(5:7)]
+sum(Byn$Byssinosis[Byn$Workspace==1]);sum(Byn$Byssinosis[Byn$Workspace==2]);sum(Byn$Byssinosis[Byn$Workspace==3])
+
+sum(Byn$Non.Byssinosis[Byn$Workspace==1]);sum(Byn$Non.Byssinosis[Byn$Workspace==2]);sum(Byn$Non.Byssinosis[Byn$Workspace==3])
+
+
+wk.sp<-matrix(c(105,18,42,564,1282,3408),ncol=2)
+colnames(wk.sp)<-c('Byn','NByn');wk.sp
+```
+
+```{r}
+library(vcdExtra)
+CMHtest(wk.sp,rscores=c(1,2,3))
+```
+Based on the Mantel Haenszel test for independece of ordinal data, we can conclude that there is in fact some relationship between Bysinosis and Workspace
+
+**Mantel Haenszel with employment** 
+```{r}
+
+#sum(Byn$Byssinosis[Byn$Employment=='<10']);sum(Byn$Byssinosis[Byn$Employment=='10-19']);sum(Byn$Byssinosis[Byn$Employment=='>=20'])
+
+#sum(Byn$Non.Byssinosis[Byn$Employment=='<10']);sum(Byn$Non.Byssinosis[Byn$Employment=='10-19']);sum(Byn$Non.Byssinosis[Byn$Employment=='>=20'])
+
+emp.mat<-matrix(c(63,26,76,2666,686,1902),ncol=2)
+colnames(emp.mat)<-c('Byn','NByn');emp.mat
+```
+```{r}
+CMHtest(emp.mat,rscores=c(1,2,3))
+```
+
+Based on the MH test and a p-value of 0.0021 we can conclude that some relationship exists between Byssinosis and number of years employed.
+
+
+## Chi Square Tests for Independence
+
+
+**Smoking**
+```{r}
+
+sum(Byn$Byssinosis[Byn$Smoking=='Yes']);sum(Byn$Non.Byssinosis[Byn$Smoking=='Yes'])
+sum(Byn$Byssinosis[Byn$Smoking=='No']);sum(Byn$Non.Byssinosis[Byn$Smoking=='No'])
+sm.mat<-matrix(c(125,3064,40,2190),ncol=2);rownames(sm.mat)<-c('Byn','N.Byn');colnames(sm.mat)<-c('Smk','N.smk')
+sm.mat
+```
+```{r}
+chisq.test(sm.mat,correct = FALSE)
+```
+From the test we see that smoking and bysinosis status are dependent in some way
+
+```{r}
+#sum(Byn$Byssinosis[Byn$Sex=='M']);sum(Byn$Non.Byssinosis[Byn$Sex=='M'])
+#sum(Byn$Byssinosis[Byn$Sex=='F']);sum(Byn$Non.Byssinosis[Byn$Sex=='F'])
+
+sex.m<-matrix(c(128,2788,37,2466),ncol=2);rownames(sex.m)<-c('Byn','N.Byn');colnames(sex.m)<-c('M','F')
+sex.m
+
+chisq.test(sex.m,correct = FALSE)
+```
+
+```{r}
+sum(Byn$Byssinosis[Byn$Race=='W']);sum(Byn$Non.Byssinosis[Byn$Race=='W'])
+sum(Byn$Byssinosis[Byn$Race=='O']);sum(Byn$Non.Byssinosis[Byn$Race=='O'])
+
+race.m<-matrix(c(92,3424,73,1830),ncol=2);rownames(race.m)<-c('Byn','N.Byn');colnames(race.m)<-c('W','O')
+
+race.m
+chisq.test(race.m,correct = FALSE)
+```
+Using a significance level of .01, we can conclude that race and bysinonis are in fact independent. 
+
+
+
+**AIC/BIC**
+```{r}
+names(Byn)
+summary(full.gl) #AIC 165.95
+drop1(full.gl,test = 'Chisq') #AIC 164.24
+drop1(full.gl,test = 'Chisq',k=log(dim(Byn[1]))) #BIC 166.18
+
+summary(red.gl)
+
+#both tests model selection methods agree that sex and race should be dropped from the model
+step(full.gl,scope=~Employment*Smoking*Workspace*Sex*Race,direction='both',trace = FALSE)
+step(red.gl,scope=~Employment*Smoking*Workspace*Sex*Race,direction = 'both',trace = FALSE)
+
+
+#the interaction model includes the following and provides the lowest AIC 160.7
+
+int.red<-glm(cbind(Byssinosis, Non.Byssinosis) ~ Employment + Smoking + Sex + 
+     Workspace + Sex:Workspace,family=binomial(link=logit),data=Byn)
+
+summary(int.red)
+
+
+```
+
+## Diagnostics
+
+```{r}
+#install.packages('arm')
+library(arm)
+
+binnedplot(fitted(red.gl),residuals(red.gl,type="response"))
+length(predict(red.gl))
+length(dffits(red.gl))
+
+
+plot(fitted(red.gl),predict(red.gl))
+
+
+#pearson residuals (Reduced GLM before AIC/BIC)
+
+binnedplot(fitted(red.gl),residuals(red.gl,type="response"))
+
+pearson_vs_std<- cbind(rstandard(red.gl,type="pearson"), residuals(red.gl,type="pearson"),
+residuals(red.gl,type="deviance"), rstandard(red.gl,type="deviance"))
+
+colnames(pearson_vs_std) <-c("standardized","pearson","deviance","std. dev. residuals")
+#head(pearson_vs_std)
+
+
+summary(pearson_vs_std)
+hist(residuals(red.gl,type="pearson"),main='Pearsons for Model1') #based on the pearson residual for the reduced model before AIC selection, we can see that our residuals do not imply a poor model.
+
+#pearson residuals (GLM w/ interaction and AIC/BIC)
+
+binnedplot(fitted(int.red),residuals(int.red,type="response"))
+
+pearson_vs_std.r<- cbind(rstandard(int.red,type="pearson"), residuals(int.red,type="pearson"),
+residuals(int.red,type="deviance"), rstandard(int.red,type="deviance"))
+
+colnames(pearson_vs_std.r) <-c("standardized","pearson","deviance","std. dev. residuals")
+head(pearson_vs_std.r)
+
+summary(pearson_vs_std.r)
+hist(residuals(int.red,type="pearson"),main='Pearson Model2') #based on the pearson residual for the reduced interaction model after AIC selection, contains
+?sort
+
+sort(pearson_vs_std.r[,2],decreasing = T)[1] #point 37 is a potential outlier of influence
+```
+
+
+```{r}
+confint(int.red,level=1-(0.05/18))
+confint(red.gl,level=1-(0.05/12))
+
+```
+
+### R Appendix
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
